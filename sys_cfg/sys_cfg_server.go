@@ -7,27 +7,36 @@ import (
 )
 
 /*
+New
 系统配置模块,缓存
 根据单位配置,
 根据分组配置,
 根据key配置
 */
-
 func New(db *xorm.Engine) (*Entity, error) {
 	e := &Entity{db: db, Safe: maps.NewSafe()}
-
-	return e, nil
+	return e, e.loading()
 }
 
-type DBConfig struct {
-	Name string
-}
-
+// Entity 系统配置实例
 type Entity struct {
 	db *xorm.Engine
 	*maps.Safe
 }
 
+// loading 数据加载,初始化
+func (this *Entity) loading() error {
+	data, err := this.GetAll()
+	if err != nil {
+		return err
+	}
+	for _, v := range data {
+		this.Set(v.ID, v)
+	}
+	return nil
+}
+
+// GetAll 获取全部配置
 func (this *Entity) GetAll() (data []*SysCfg, err error) {
 	err = this.db.Find(&data)
 	return data, err
