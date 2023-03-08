@@ -1,59 +1,11 @@
 package sys_cfg
 
 import (
-	"errors"
+	"github.com/injoyai/base/g"
 	"github.com/injoyai/conv"
 )
 
-const (
-	String = "string"
-	Bool   = "bool"
-	Int    = "int"
-	Float  = "float"
-)
-
-// ValueType 基础值类型
-type ValueType string
-
-func (this ValueType) String() string {
-	switch this {
-	case String:
-		return "字符"
-	case Bool:
-		return "布尔"
-	case Int:
-		return "整数"
-	case Float:
-		return "浮点"
-	}
-	return "未知"
-}
-
-func (this ValueType) Value(v interface{}) interface{} {
-	switch this {
-	case String:
-		return conv.String(v)
-	case Bool:
-		return conv.Bool(v)
-	case Int:
-		return conv.Int(v)
-	case Float:
-		return conv.Float64(v)
-	}
-	return v
-}
-
-func (this *ValueType) Check() error {
-	switch *this {
-	case String, Bool, Int, Float:
-	case "":
-		*this = String
-	default:
-		return errors.New("未知数据类型")
-	}
-	return nil
-}
-
+// SysCfgSearch 配置数据搜索
 type SysCfgSearch struct {
 	PageNum  int    `json:"pageNum"`
 	PageSize int    `json:"pageSize"`
@@ -63,6 +15,7 @@ type SysCfgSearch struct {
 	Group    string `json:"group"`  //分组标识
 }
 
+// SysCfg 系统配置
 type SysCfg struct {
 	ID     int64 `json:"id"`                    //主键
 	InDate int64 `json:"inDate" xorm:"created"` //创建时间
@@ -71,7 +24,7 @@ type SysCfg struct {
 	Memo        string      `json:"memo"`              //备注
 	Key         string      `json:"key" xorm:"index"`  //配置数据标识
 	ValueString string      `json:"-"`                 //配置数据内容
-	ValueType   ValueType   `json:"valueType"`         //配置数据类型
+	ValueType   g.Type      `json:"valueType"`         //配置数据类型
 	Value       interface{} `json:"value" xorm:"-"`    //配置数据
 
 	DeptID    string `json:"deptID" xorm:"index"` //部门标识
@@ -82,17 +35,18 @@ type SysCfg struct {
 
 func (this *SysCfg) Resp() *SysCfg {
 	if len(this.ValueType) == 0 {
-		this.ValueType = String
+		this.ValueType = g.String
 	}
 	this.Value = this.ValueType.Value(this.ValueString)
 	return this
 }
 
+// SysCfgCreateReq 配置数据新建
 type SysCfgCreateReq struct {
 	Name      string      `json:"name"`             //名称
 	Memo      string      `json:"memo"`             //备注
 	Key       string      `json:"key" xorm:"index"` //配置数据标识
-	ValueType ValueType   `json:"valueType"`        //配置数据类型
+	ValueType g.Type      `json:"valueType"`        //配置数据类型
 	Value     interface{} `json:"value" xorm:"-"`   //配置数据
 
 	DeptID    string `json:"deptID" xorm:"index"` //部门id
@@ -119,6 +73,7 @@ func (this *SysCfgCreateReq) New() (*SysCfg, error) {
 	}, nil
 }
 
+// SysCfgUpdateReq 系统配置修改
 type SysCfgUpdateReq struct {
 	ID int64 `json:"id"`
 	*SysCfgCreateReq
