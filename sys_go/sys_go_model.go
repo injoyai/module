@@ -5,38 +5,48 @@ import (
 	"fmt"
 	"github.com/injoyai/base/chans"
 	"github.com/injoyai/base/g"
+	"github.com/injoyai/base/list"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/cache"
 	"github.com/injoyai/conv"
+	"sync/atomic"
 	"time"
 )
 
 type Config struct {
-	DoneSize int //历史执行保存数量
-	GoLimit  int //最大协程数量
+	DoneSize int  //历史执行保存数量
+	GoLimit  uint //最大协程数量
+	WaitCap  int  //等待队列长度
 }
 
 func newManage(cfg *Config) *Manage {
+	if cfg.GoLimit == 0 {
+		cfg.GoLimit = 1000
+	}
 	m := &Manage{
-		queue:   chans.NewQueueFunc(cfg.GoLimit, cfg.GoLimit),
-		wait:    make([]*Create, 0),
+		limit:   chans.NewWaitLimit(cfg.GoLimit),
+		wait:    make(chan *Create, cfg.WaitCap),
 		running: maps.NewSafe(),
 		done:    cache.NewCycle(cfg.DoneSize),
 	}
+	go m.run()
 	return m
 }
 
 // Manage 协程管理,可视化
 type Manage struct {
-	queue   *chans.QueueFunc //协程管理
-	wait    []*Create        //可选协程函数
-	running *maps.Safe       //正在执行协程
-	done    *cache.Cycle     //历史协程执行记录
+	cfg        *Config          //配置信息
+	limit      *chans.WaitLimit //协程管理
+	wait       chan *Create     //等待执行的协程
+	wait2      *list.Entity     //
+	running    *maps.Safe       //正在执行协程
+	runningNum int32            //正在执行的数量
+	done       *cache.Cycle     //历史协程执行记录
 }
 
-// WaitList 等待执行列表
-func (this *Manage) WaitList() (list []*Create) {
-	return this.wait
+// RunNum 释放协程的数量
+func (this *Manage) RunNum() int {
+	return int(atomic.LoadInt32(&this.runningNum))
 }
 
 // RunList 正在执行的列表
@@ -56,38 +66,36 @@ func (this *Manage) DoneList(limit ...int) (list []*Info) {
 	return
 }
 
-// Wait 加入到等待执行
-func (this *Manage) Wait(c *Create) {
-	this.wait = append(this.wait, c)
-}
-
-// Run 执行协程
-func (this *Manage) Run(c *Create) string {
-	return this.run(c.New(), c.Handler)
-}
-
-// RunWait 执行协程
-func (this *Manage) RunWait(idx int, param ...g.Map) (string, bool) {
-	if len(this.wait) > idx {
-		c := this.wait[idx]
-		return this.run(c.New(param...), c.Handler), true
-	}
-	return "", false
+// Go 执行协程
+func (this *Manage) Go(c *Create) {
+	this.wait <- c
+	this.wait2.Get(0)
+	this.wait2.Del(0)
 }
 
 // run 公共执行协程
-func (this *Manage) run(info *Info, handler func(ctx context.Context, a *Manage, m Go) error) string {
-	this.running.Set(info.Key, info)
-	this.queue.Do(func(no int, num int) {
-		defer func() {
-			this.done.Add(info)
-			this.running.Del(info.Key)
-		}()
-		info.Run(func(ctx context.Context, m Go) error {
-			return handler(ctx, this, m)
-		})
-	})
-	return info.Key
+func (this *Manage) run() {
+	for {
+		this.limit.Add()
+		select {
+		case c := <-this.wait:
+			info := c.New()
+			this.running.Set(info.Key, info)
+			atomic.AddInt32(&this.runningNum, 1)
+			this.runningNum++
+			go func(info *Info) {
+				defer func() {
+					atomic.AddInt32(&this.runningNum, -1)
+					this.done.Add(info)
+					this.running.Del(info.Key)
+					this.limit.Done()
+				}()
+				info.Run(func(ctx context.Context, m Go) error {
+					return c.Handler(ctx, this, m)
+				})
+			}(info)
+		}
+	}
 }
 
 // Update 更新协程信息
@@ -122,11 +130,11 @@ type Create struct {
 
 func (this *Create) New(param ...g.Map) *Info {
 	i := &Info{
-		Key:    g.UUID(),
-		Name:   this.Name,
-		Memo:   this.Memo,
-		InDate: time.Now(),
-		Param:  this.Param,
+		Key:     g.UUID(),
+		Name:    this.Name,
+		Memo:    this.Memo,
+		RunDate: time.Now(),
+		Param:   this.Param,
 	}
 	if len(param) > 0 {
 		i.Param = param[0]
@@ -138,39 +146,40 @@ func (this *Create) New(param ...g.Map) *Info {
 // Info 协程信息,储存在内存中
 type Info struct {
 	//基本信息
-	Key    string    `json:"key"`    //唯一标识
-	Name   string    `json:"name"`   //名称
-	Memo   string    `json:"memo"`   //备注
-	InDate time.Time `json:"inDate"` //创建时间
-	Param  g.Map     `json:"param"`  //参数
+	Key     string    `json:"key"`    //唯一标识
+	Name    string    `json:"name"`   //名称
+	Memo    string    `json:"memo"`   //备注
+	Param   g.Map     `json:"param"`  //参数
+	RunDate time.Time `json:"inDate"` //开始时间
 
 	//结果
-	Log    []string `json:"log"`    //日志
-	Spend  int      `json:"spend"`  //耗时ms
-	Succ   bool     `json:"succ"`   //执行是否成功
-	Result string   `json:"result"` //执行结果,错误信息
+	Log      []string  `json:"log"`      //日志
+	Spend    int       `json:"spend"`    //耗时ms
+	Succ     bool      `json:"succ"`     //执行是否成功
+	Result   string    `json:"result"`   //执行结果,错误信息
+	DoneDate time.Time `json:"doneDate"` //结束时间
 
 	cancel context.CancelFunc //上下文
 	conv.Extend
 }
 
 func (this *Info) String() string {
-	return fmt.Sprintf("Key:%s Name:%s Param:%s Start:%s",
-		this.Key, this.Name, this.Param.Json(), this.InDate.Format(g.TimeLayout))
+	return fmt.Sprintf("Key:%s  Name:%s  Param:%s  Start:%s",
+		this.Key, this.Name, this.Param.Json(), this.RunDate.Format(g.TimeLayout))
 }
 
 // Update 更新信息
-func (this *Info) Update(u *Update) *Info {
+func (this *Info) Update(u *Update) {
 	this.Memo = u.Memo
 	this.Param = u.Param
-	return this
 }
 
 // Done 执行结束,赋值
 func (this *Info) Done(err error) {
 	this.Succ = err == nil
 	this.Result = conv.New(err).String("成功")
-	this.Spend = int(time.Now().Sub(this.InDate) / 1e6)
+	this.DoneDate = time.Now()
+	this.Spend = int(this.DoneDate.Sub(this.RunDate) / 1e6)
 	this.cancel = nil
 	this.Extend = nil
 }
@@ -182,9 +191,7 @@ func (this *Info) GetVar(key string) *conv.Var {
 
 // Print 实现接口,打印日志
 func (this *Info) Print(v ...interface{}) {
-	msg := fmt.Sprint(v...)
-	fmt.Println(msg)
-	this.Log = append(this.Log, msg)
+	this.Log = append(this.Log, fmt.Sprint(v...))
 }
 
 // Run 协程执行

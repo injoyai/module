@@ -14,10 +14,9 @@ func NewManage(cfg *Config) *Manage {
 func DefaultManage() *Manage {
 	m := newManage(&Config{
 		DoneSize: 100,
-		GoLimit:  10,
+		GoLimit:  100,
+		WaitCap:  100,
 	})
-	m.Wait(Timer)
-	m.Wait(PrintInfo)
 	return m
 }
 
@@ -36,7 +35,7 @@ var (
 				case <-ctx.Done():
 					return ErrContext
 				case <-timer.C:
-					m.Print(m.GetString("text"))
+					m.Print(m.GetString("text", "text"))
 				}
 			}
 		},
@@ -55,13 +54,13 @@ var (
 				case <-ctx.Done():
 					return ErrContext
 				case <-timer.C:
-					fmt.Println("=========================================================")
+					fmt.Println("===============================Run===========================")
 					for _, v := range a.RunList() {
 						fmt.Println(v)
-						fmt.Println("Log:")
-						for _, k := range v.Log {
-							fmt.Println("\t", k)
-						}
+					}
+					fmt.Println("===============================Done==========================")
+					for _, v := range a.DoneList() {
+						fmt.Println(v)
 					}
 				}
 			}
