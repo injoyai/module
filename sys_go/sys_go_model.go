@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/injoyai/base/chans"
 	"github.com/injoyai/base/g"
-	"github.com/injoyai/base/list"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/cache"
 	"github.com/injoyai/conv"
@@ -24,10 +23,11 @@ func newManage(cfg *Config) *Manage {
 		cfg.GoLimit = 1000
 	}
 	m := &Manage{
-		limit:   chans.NewWaitLimit(cfg.GoLimit),
-		wait:    make(chan *Create, cfg.WaitCap),
-		running: maps.NewSafe(),
-		done:    cache.NewCycle(cfg.DoneSize),
+		limit:    chans.NewWaitLimit(cfg.GoLimit),
+		waitMap:  maps.NewSafe(),
+		waitChan: make(chan *Create, cfg.WaitCap),
+		running:  maps.NewSafe(),
+		done:     cache.NewCycle(cfg.DoneSize),
 	}
 	go m.run()
 	return m
@@ -37,8 +37,8 @@ func newManage(cfg *Config) *Manage {
 type Manage struct {
 	cfg        *Config          //配置信息
 	limit      *chans.WaitLimit //协程管理
-	wait       chan *Create     //等待执行的协程
-	wait2      *list.Entity     //
+	waitMap    *maps.Safe       //等待执行的协程
+	waitChan   chan *Create     //等待执行的通道
 	running    *maps.Safe       //正在执行协程
 	runningNum int32            //正在执行的数量
 	done       *cache.Cycle     //历史协程执行记录
@@ -68,9 +68,9 @@ func (this *Manage) DoneList(limit ...int) (list []*Info) {
 
 // Go 执行协程
 func (this *Manage) Go(c *Create) {
-	this.wait <- c
-	this.wait2.Get(0)
-	this.wait2.Del(0)
+	c.key = g.UUID()
+	this.waitChan <- c
+	this.waitMap.Set(c.key, c)
 }
 
 // run 公共执行协程
@@ -78,11 +78,10 @@ func (this *Manage) run() {
 	for {
 		this.limit.Add()
 		select {
-		case c := <-this.wait:
+		case c := <-this.waitChan:
 			info := c.New()
 			this.running.Set(info.Key, info)
 			atomic.AddInt32(&this.runningNum, 1)
-			this.runningNum++
 			go func(info *Info) {
 				defer func() {
 					atomic.AddInt32(&this.runningNum, -1)
@@ -122,6 +121,7 @@ type Update struct {
 
 // Create 协程新建配置信息
 type Create struct {
+	key     string                                           `json:"key"`   //唯一标识
 	Name    string                                           `json:"name"`  //名称
 	Memo    string                                           `json:"memo"`  //备注
 	Param   g.Map                                            `json:"param"` //参数
@@ -130,7 +130,7 @@ type Create struct {
 
 func (this *Create) New(param ...g.Map) *Info {
 	i := &Info{
-		Key:     g.UUID(),
+		Key:     this.key,
 		Name:    this.Name,
 		Memo:    this.Memo,
 		RunDate: time.Now(),

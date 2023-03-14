@@ -1,4 +1,4 @@
-package script
+package sys_script
 
 import (
 	"fmt"
@@ -7,8 +7,6 @@ import (
 	"sync"
 )
 
-var Nil = otto.NullValue()
-
 func NewClient() *Client {
 	vm := otto.New()
 	cli := &Client{
@@ -16,7 +14,7 @@ func NewClient() *Client {
 	}
 	cli.Set("print", cli.toFunc(func(args *Args) interface{} {
 		fmt.Println(args.Interfaces()...)
-		return Nil
+		return nil
 	}))
 	cli.Exec("var console={\nlog:function(any){\nprint(any)\n}\n}")
 	return cli

@@ -1,4 +1,4 @@
-package script
+package sys_script
 
 import (
 	"fmt"
