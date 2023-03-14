@@ -30,6 +30,14 @@ type Cron struct {
 	mu sync.RWMutex
 }
 
+func (this *Cron) Start() {
+	this.c.Start()
+}
+
+func (this *Cron) Stop() {
+	this.c.Stop()
+}
+
 // GetTaskAll 读取全部任务
 func (this *Cron) GetTaskAll() []*Task {
 	m := make(map[cron.EntryID]*Task)
