@@ -1,4 +1,4 @@
-package sys_moddle
+package sys_middle
 
 import (
 	"bytes"
@@ -16,13 +16,12 @@ import (
 )
 
 // NewMonitorAPI 监控api实例
-func NewMonitorAPI(cfg *cache.FileLogConfig, i cache.IFileLog) *MonitorAPI {
-	return &MonitorAPI{FileLog: cache.NewFileLog(cfg), i: i}
+func NewMonitorAPI(cfg *cache.FileLogConfig) *MonitorAPI {
+	return &MonitorAPI{FileLog: cache.NewFileLog(cfg)}
 }
 
 type MonitorAPI struct {
 	*cache.FileLog
-	i cache.IFileLog
 }
 
 func (this *MonitorAPI) Middle(r *http.Request) func() {
@@ -41,8 +40,8 @@ func (this *MonitorAPI) Middle(r *http.Request) func() {
 	}
 }
 
-// GetAPIInfoList 获取接口请求列表
-func (this *MonitorAPI) GetAPIInfoList(pageSize int) (interface{}, error) {
+// GetAPILogLast 获取接口请求列表
+func (this *MonitorAPI) GetAPILogLast(pageSize int) (interface{}, error) {
 	list, err := this.GetLogLast(pageSize)
 	if err != nil {
 		return nil, err
@@ -81,8 +80,8 @@ func (this *MonitorAPI) GetAPIRate(start, end int64) (interface{}, error) {
 }
 
 // GetAPICurve 获取曲线
-func (this *MonitorAPI) GetAPICurve(start, end int64) (_ interface{}, err error) {
-	return this.GetLogCurve(time.Unix(start, 0), time.Unix(end, 0), time.Hour, this.i)
+func (this *MonitorAPI) GetAPICurve(start, end int64, i IMonitorAPI) (_ interface{}, err error) {
+	return this.GetLogCurve(time.Unix(start, 0), time.Unix(end, 0), time.Hour, &_monitorAPI{i})
 }
 
 // GetAPILog 获取记录
@@ -200,4 +199,17 @@ func (this MonitorAPISort) Swap(i, j int) {
 
 func (this MonitorAPISort) Len() int {
 	return len(this)
+}
+
+type IMonitorAPI interface {
+	Report(node int64, list []cache.IFileLogAny) (interface{}, error) //整理对象,合并统计,曲线的格式
+	Compare(a, b interface{}) bool                                    //排序对象,曲线
+}
+
+type _monitorAPI struct {
+	IMonitorAPI
+}
+
+func (this *_monitorAPI) Decode(bs []byte) (cache.IFileLogAny, error) {
+	return DecodeMonitorAPILog(bs), nil
 }
