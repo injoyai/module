@@ -101,7 +101,7 @@ func (this *Create) Update(u *Update) {
 }
 
 type Update struct {
-	Key    string `json:"key"`
+	Key    string `json:"key"`    //唯一标识
 	Group  string `json:"group"`  //分组
 	Name   string `json:"name"`   //名称
 	Memo   string `json:"memo"`   //备注

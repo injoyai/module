@@ -80,8 +80,8 @@ func (this *MonitorAPI) GetAPIRate(start, end int64) (interface{}, error) {
 }
 
 // GetAPICurve 获取曲线
-func (this *MonitorAPI) GetAPICurve(start, end int64, i IMonitorAPI) (_ interface{}, err error) {
-	return this.GetLogCurve(time.Unix(start, 0), time.Unix(end, 0), time.Hour, &_monitorAPI{i})
+func (this *MonitorAPI) GetAPICurve(start, end int64, fn func(node int64, list []cache.IFileLogAny) (interface{}, error)) (_ interface{}, err error) {
+	return this.GetLogCurve(time.Unix(start, 0), time.Unix(end, 0), time.Hour, &_monitorAPI{fn})
 }
 
 // GetAPILog 获取记录
@@ -201,15 +201,14 @@ func (this MonitorAPISort) Len() int {
 	return len(this)
 }
 
-type IMonitorAPI interface {
-	Report(node int64, list []cache.IFileLogAny) (interface{}, error) //整理对象,合并统计,曲线的格式
-	Compare(a, b interface{}) bool                                    //排序对象,曲线
-}
-
 type _monitorAPI struct {
-	IMonitorAPI
+	fn func(node int64, list []cache.IFileLogAny) (interface{}, error)
 }
 
 func (this *_monitorAPI) Decode(bs []byte) (cache.IFileLogAny, error) {
 	return DecodeMonitorAPILog(bs), nil
+}
+
+func (this *_monitorAPI) Report(node int64, list []cache.IFileLogAny) (interface{}, error) {
+	return this.fn(node, list)
 }
