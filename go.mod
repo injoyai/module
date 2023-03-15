@@ -3,6 +3,7 @@ module github.com/injoyai/module
 go 1.15
 
 require (
+	github.com/go-ole/go-ole v1.2.6
 	github.com/injoyai/base v1.0.2
 	github.com/injoyai/cache v0.0.1
 	github.com/injoyai/conv v1.0.4

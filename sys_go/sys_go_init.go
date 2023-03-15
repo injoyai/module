@@ -4,15 +4,17 @@ import (
 	"errors"
 )
 
-func NewManage(cfg *Config) *Manage {
-	return newManage(cfg)
+var Default = DefaultManage()
+
+func New(cfg *Config) *Entity {
+	return newEntity(cfg)
 }
 
-func DefaultManage() *Manage {
-	m := newManage(&Config{
-		DoneSize: 100,
-		GoLimit:  100,
-		WaitCap:  100,
+func DefaultManage() *Entity {
+	m := newEntity(&Config{
+		DoneSize: 1000,
+		GoLimit:  1000,
+		WaitCap:  1000,
 	})
 	return m
 }

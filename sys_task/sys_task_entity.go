@@ -16,7 +16,7 @@ type Config struct {
 
 func New(cfg *Config) *Entity {
 	e := &Entity{
-		goroute: sys_go.NewManage(cfg.Config),
+		goroute: sys_go.New(cfg.Config),
 		script:  sys_script.New(cfg.ScriptNum),
 		cron:    sys_corn.New(),
 	}

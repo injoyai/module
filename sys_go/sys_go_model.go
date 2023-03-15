@@ -18,7 +18,7 @@ type Config struct {
 	WaitCap  int  //等待队列长度
 }
 
-func newManage(cfg *Config) *Entity {
+func newEntity(cfg *Config) *Entity {
 	if cfg.GoLimit == 0 {
 		cfg.GoLimit = 1000
 	}
