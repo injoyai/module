@@ -18,14 +18,17 @@ type Config struct {
 	WaitCap  int  //等待队列长度
 }
 
-func newManage(cfg *Config) *Manage {
+func newManage(cfg *Config) *Entity {
 	if cfg.GoLimit == 0 {
 		cfg.GoLimit = 1000
 	}
-	m := &Manage{
+	if cfg.WaitCap <= 0 {
+		cfg.WaitCap = 1000
+	}
+	m := &Entity{
 		limit:    chans.NewWaitLimit(cfg.GoLimit),
-		waitMap:  maps.NewSafe(),
-		waitChan: make(chan *Create, cfg.WaitCap),
+		waitList: make([]*WaitInfo, 0),
+		waitChan: make(chan *WaitInfo, cfg.WaitCap),
 		running:  maps.NewSafe(),
 		done:     cache.NewCycle(cfg.DoneSize),
 	}
@@ -33,24 +36,29 @@ func newManage(cfg *Config) *Manage {
 	return m
 }
 
-// Manage 协程管理,可视化
-type Manage struct {
+// Entity 协程管理,可视化
+type Entity struct {
 	cfg        *Config          //配置信息
 	limit      *chans.WaitLimit //协程管理
-	waitMap    *maps.Safe       //等待执行的协程
-	waitChan   chan *Create     //等待执行的通道
+	waitList   []*WaitInfo      //等待执行的协程
+	waitChan   chan *WaitInfo   //等待执行的通道
 	running    *maps.Safe       //正在执行协程
 	runningNum int32            //正在执行的数量
 	done       *cache.Cycle     //历史协程执行记录
 }
 
+// WaitList 等待列表
+func (this *Entity) WaitList() []*WaitInfo {
+	return this.waitList
+}
+
 // RunNum 释放协程的数量
-func (this *Manage) RunNum() int {
+func (this *Entity) RunNum() int {
 	return int(atomic.LoadInt32(&this.runningNum))
 }
 
 // RunList 正在执行的列表
-func (this *Manage) RunList() (list []*Info) {
+func (this *Entity) RunList() (list []*Info) {
 	this.running.Range(func(key, value interface{}) bool {
 		list = append(list, value.(*Info))
 		return true
@@ -59,7 +67,7 @@ func (this *Manage) RunList() (list []*Info) {
 }
 
 // DoneList 已经执行完的列表
-func (this *Manage) DoneList(limit ...int) (list []*Info) {
+func (this *Entity) DoneList(limit ...int) (list []*Info) {
 	for _, v := range this.done.List(limit...) {
 		list = append(list, v.(*Info))
 	}
@@ -67,45 +75,46 @@ func (this *Manage) DoneList(limit ...int) (list []*Info) {
 }
 
 // Go 执行协程
-func (this *Manage) Go(c *Create) {
-	c.key = g.UUID()
-	this.waitChan <- c
-	this.waitMap.Set(c.key, c)
+func (this *Entity) Go(c *Create) *WaitInfo {
+	w := c.New()
+	this.waitChan <- w
+	this.waitList = append(this.waitList, w)
+	return w
 }
 
 // run 公共执行协程
-func (this *Manage) run() {
+func (this *Entity) run() {
 	for {
 		this.limit.Add()
-		select {
-		case c := <-this.waitChan:
-			info := c.New()
-			this.running.Set(info.Key, info)
-			atomic.AddInt32(&this.runningNum, 1)
-			go func(info *Info) {
-				defer func() {
-					atomic.AddInt32(&this.runningNum, -1)
-					this.done.Add(info)
-					this.running.Del(info.Key)
-					this.limit.Done()
-				}()
-				info.Run(func(ctx context.Context, m Go) error {
-					return c.Handler(ctx, this, m)
-				})
-			}(info)
-		}
+		c := <-this.waitChan
+		this.waitList = this.waitList[1:]
+		info := c.New()
+		this.running.Set(info.Key, info)
+		atomic.AddInt32(&this.runningNum, 1)
+		go func(info *Info) {
+			defer func() {
+				atomic.AddInt32(&this.runningNum, -1)
+				this.done.Add(info)
+				this.running.Del(info.Key)
+				this.limit.Done()
+			}()
+			info.Run(func(ctx context.Context, p Param) (err error) {
+				defer g.Recover(&err)
+				return c.Handler(ctx, this, p)
+			})
+		}(info)
 	}
 }
 
 // Update 更新协程信息
-func (this *Manage) Update(u *Update) {
+func (this *Entity) Update(u *Update) {
 	if v := this.running.MustGet(u.Key); v != nil {
 		v.(*Info).Update(u)
 	}
 }
 
 // Close 关闭正在执行的协程,通过上下文
-func (this *Manage) Close(key string) error {
+func (this *Entity) Close(key string) error {
 	if v := this.running.MustGet(key); v != nil {
 		return v.(*Info).Close()
 	}
@@ -121,16 +130,29 @@ type Update struct {
 
 // Create 协程新建配置信息
 type Create struct {
-	key     string                                           `json:"key"`   //唯一标识
-	Name    string                                           `json:"name"`  //名称
-	Memo    string                                           `json:"memo"`  //备注
-	Param   g.Map                                            `json:"param"` //参数
-	Handler func(ctx context.Context, a *Manage, m Go) error `json:"-"`     //执行函数
+	Group   string                                              `json:"group"` //分组
+	Name    string                                              `json:"name"`  //名称
+	Memo    string                                              `json:"memo"`  //备注
+	Param   g.Map                                               `json:"param"` //参数
+	Handler func(ctx context.Context, a *Entity, p Param) error `json:"-"`     //执行函数
 }
 
-func (this *Create) New(param ...g.Map) *Info {
+func (this *Create) New() *WaitInfo {
+	return &WaitInfo{
+		Key:    g.UUID(),
+		Create: this,
+	}
+}
+
+type WaitInfo struct {
+	Key string `json:"key"` //唯一标识
+	*Create
+}
+
+func (this *WaitInfo) New(param ...g.Map) *Info {
 	i := &Info{
-		Key:     this.key,
+		Key:     this.Key,
+		Group:   this.Group,
 		Name:    this.Name,
 		Memo:    this.Memo,
 		RunDate: time.Now(),
@@ -147,6 +169,7 @@ func (this *Create) New(param ...g.Map) *Info {
 type Info struct {
 	//基本信息
 	Key     string    `json:"key"`    //唯一标识
+	Group   string    `json:"group"`  //分组信息
 	Name    string    `json:"name"`   //名称
 	Memo    string    `json:"memo"`   //备注
 	Param   g.Map     `json:"param"`  //参数
@@ -195,7 +218,7 @@ func (this *Info) Print(v ...interface{}) {
 }
 
 // Run 协程执行
-func (this *Info) Run(fn func(ctx context.Context, g Go) error) {
+func (this *Info) Run(fn func(ctx context.Context, p Param) error) {
 	ctx, cancel := g.WithCancel()
 	this.cancel = cancel
 	this.Done(fn(ctx, this))
@@ -209,7 +232,7 @@ func (this *Info) Close() error {
 	return nil
 }
 
-type Go interface {
+type Param interface {
 	conv.Extend
 	Print(v ...interface{})
 }
