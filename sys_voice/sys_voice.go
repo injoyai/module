@@ -7,13 +7,15 @@ import (
 	"sync"
 )
 
+var Default = New()
+
 func Speak(msg string) error {
-	return New().Speak(msg)
+	return Default.Speak(msg)
 }
 
 // Save ./wav xxx
 func Save(path, msg string) error {
-	return New().Save(path, msg)
+	return Default.Save(path, msg)
 }
 
 func New() *Voice {
