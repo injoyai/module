@@ -22,16 +22,12 @@ type QiniuConfig struct {
 
 type Qiniu struct {
 	cfg *QiniuConfig
-	err error
 }
 
 // Save 上传数据
 // @name,名称
 // @r,读数据流
 func (this *Qiniu) Save(filename string, fileBytes []byte, rename ...bool) (string, error) {
-	if this.err != nil {
-		return "", this.err
-	}
 	if len(rename) > 0 && rename[0] {
 		filename = md5.Encrypt(filename + time.Now().String())
 	}
