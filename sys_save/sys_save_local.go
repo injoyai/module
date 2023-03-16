@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func NewLocal(dir string) *Local {
+func NewLocal(dir string) Interface {
 	return &Local{Dir: dir}
 }
 

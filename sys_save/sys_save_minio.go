@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func NewMinio(cfg *MinioConfig) *Minio {
+func NewMinio(cfg *MinioConfig) Interface {
 	cli, err := minio.New(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, false)
 	return &Minio{Client: cli, cfg: cfg, err: err}
 }
