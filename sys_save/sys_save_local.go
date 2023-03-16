@@ -2,13 +2,14 @@ package sys_save
 
 import (
 	"github.com/injoyai/base/bytes/crypt/md5"
+	"github.com/injoyai/conv"
 	"os"
 	"path/filepath"
 	"time"
 )
 
 func NewLocal(dir string) Interface {
-	return &Local{Dir: dir}
+	return &Local{Dir: conv.SelectString(len(dir) == 0, "./data/upload/", dir)}
 }
 
 type Local struct {
