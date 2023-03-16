@@ -1,5 +1,5 @@
 package sys_save
 
 type Interface interface {
-	Save(filename string, fileBytes []byte) (string, error)
+	Save(filename string, fileBytes []byte, rename ...bool) (string, error)
 }

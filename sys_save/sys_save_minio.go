@@ -3,15 +3,14 @@ package sys_save
 import (
 	"bytes"
 	"fmt"
+	"github.com/injoyai/base/bytes/crypt/md5"
 	"github.com/minio/minio-go"
+	"time"
 )
 
-func NewMinio(cfg *MinioConfig) (*Minio, error) {
+func NewMinio(cfg *MinioConfig) *Minio {
 	cli, err := minio.New(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, false)
-	if err != nil {
-		return nil, err
-	}
-	return &Minio{Client: cli, cfg: cfg}, nil
+	return &Minio{Client: cli, cfg: cfg, err: err}
 }
 
 type MinioConfig struct {
@@ -24,9 +23,16 @@ type MinioConfig struct {
 type Minio struct {
 	cfg *MinioConfig
 	*minio.Client
+	err error
 }
 
-func (this *Minio) Save(filename string, fileBytes []byte) (string, error) {
+func (this *Minio) Save(filename string, fileBytes []byte, rename ...bool) (string, error) {
+	if this.err != nil {
+		return "", this.err
+	}
+	if len(rename) > 0 && rename[0] {
+		filename = md5.Encrypt(filename + time.Now().String())
+	}
 	_, err := this.PutObject(this.cfg.BucketName, filename, bytes.NewReader(fileBytes), int64(len(fileBytes)), minio.PutObjectOptions{})
 	return fmt.Sprintf("%s/%s/%s", this.cfg.Endpoint, this.cfg.BucketName, filename), err
 }

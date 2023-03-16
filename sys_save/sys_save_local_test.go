@@ -5,13 +5,8 @@ import (
 	"testing"
 )
 
-func TestMinio_Save(t *testing.T) {
-	c := NewMinio(&MinioConfig{
-		Endpoint:   "192.168.10.103:9002",
-		AccessKey:  "minioadmin",
-		SecretKey:  "minioadmin",
-		BucketName: "qianlang-iot-admin",
-	})
+func TestNewLocal(t *testing.T) {
+	c := NewLocal("./")
 	bs, err := ioutil.ReadFile("C:\\Users\\injoy\\Pictures\\Camera Roll\\WIN_20220908_08_09_35_Pro.jpg")
 	if err != nil {
 		t.Error(err)
