@@ -18,7 +18,7 @@ type Local struct {
 
 func (this *Local) Save(filename string, fileBytes []byte, rename ...bool) (string, error) {
 	now := time.Now()
-	dir := filepath.Join(this.Dir, now.Format("2006-01-02/"))
+	dir := filepath.Join(this.Dir, now.Format("2006-01"))
 	if err := os.MkdirAll(dir, 0666); err != nil {
 		return "", err
 	}

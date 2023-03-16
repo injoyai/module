@@ -27,12 +27,14 @@ type Minio struct {
 }
 
 func (this *Minio) Save(filename string, fileBytes []byte, rename ...bool) (string, error) {
+	now := time.Now()
 	if this.err != nil {
 		return "", this.err
 	}
 	if len(rename) > 0 && rename[0] {
-		filename = md5.Encrypt(filename + time.Now().String())
+		filename = md5.Encrypt(filename + now.String())
 	}
+	filename = now.Format("2006-01/") + filename
 	_, err := this.PutObject(this.cfg.BucketName, filename, bytes.NewReader(fileBytes), int64(len(fileBytes)), minio.PutObjectOptions{})
 	return fmt.Sprintf("%s/%s/%s", this.cfg.Endpoint, this.cfg.BucketName, filename), err
 }
