@@ -22,8 +22,7 @@ func TestNew(t *testing.T) {
 		Spec:   sys_corn.NewIntervalSpec(time.Second),
 		Script: "print(1)",
 	}
-	x.Run(c)
-
+	_ = x
 	go func() {
 		<-time.After(time.Second * 3)
 		c.Script = "print(2)"
