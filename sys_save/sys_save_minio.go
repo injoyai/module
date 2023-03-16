@@ -27,10 +27,10 @@ type Minio struct {
 }
 
 func (this *Minio) Save(filename string, fileBytes []byte, rename ...bool) (string, error) {
-	now := time.Now()
 	if this.err != nil {
 		return "", this.err
 	}
+	now := time.Now()
 	if len(rename) > 0 && rename[0] {
 		filename = md5.Encrypt(filename + now.String())
 	}
