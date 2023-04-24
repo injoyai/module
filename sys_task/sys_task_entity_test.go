@@ -16,13 +16,17 @@ func TestNew(t *testing.T) {
 		},
 		ScriptNum: 10,
 	})
-	c := &Create{
+	c := &SysTaskCreateReq{
+		Group:  "系统",
 		Name:   "测试",
 		Memo:   "",
 		Spec:   sys_corn.NewIntervalSpec(time.Second),
 		Script: "print(1)",
 	}
 	_ = x
+	if err := x.PostTask(c); err != nil {
+		t.Error(err)
+	}
 	go func() {
 		<-time.After(time.Second * 3)
 		c.Script = "print(2)"

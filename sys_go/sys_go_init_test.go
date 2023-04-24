@@ -12,7 +12,7 @@ var (
 		Name:  "定时器",
 		Memo:  "",
 		Param: nil,
-		Handler: func(ctx context.Context, a *Manage, m Go) error {
+		Handler: func(ctx context.Context, a *Entity, m Param) error {
 			second := m.GetSecond("second", 1)
 			timer := time.NewTimer(second)
 			defer timer.Stop()
@@ -31,7 +31,7 @@ var (
 		Name:  "打印信息",
 		Memo:  "",
 		Param: nil,
-		Handler: func(ctx context.Context, a *Manage, m Go) error {
+		Handler: func(ctx context.Context, a *Entity, m Param) error {
 			second := m.GetSecond("second", 1)
 			timer := time.NewTimer(second)
 			defer timer.Stop()
@@ -62,7 +62,7 @@ func TestDefaultManage(t *testing.T) {
 	m.Go(&Create{
 		Name:  "测试",
 		Param: nil,
-		Handler: func(ctx context.Context, a *Manage, m Go) error {
+		Handler: func(ctx context.Context, a *Entity, m Param) error {
 			time.Sleep(time.Second * 10)
 			return nil
 		},
@@ -71,7 +71,7 @@ func TestDefaultManage(t *testing.T) {
 }
 
 func TestManageLimit(t *testing.T) {
-	m := NewManage(&Config{
+	m := newEntity(&Config{
 		GoLimit: 2,
 	})
 	for i := 0; i < 10; i++ {
